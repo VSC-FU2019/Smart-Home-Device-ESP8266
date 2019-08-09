@@ -13,11 +13,11 @@
 
 /************************* SET PIN DEVICE *********************************/ 
 // -- CAN'T USE PIN 9 FOR OUTPUT - TRIGGER WDT TIMER                               
-#define FAN_PIN               5                                // pin connected to the FAN. GPIO5 (D1)
+#define DEVICE_PIN               5                                // pin connected to the FAN. GPIO5 (D1)
 #define LIGHT_PIN             4                                // pin connected to the LIGHT. GPIO4 (D2)
-#define AIR_PIN               14                               // pin connected to the AIR CONDITIONER. GPIO14 (D5)
-#define TIVI_PIN              16                               // pin connected to the TELEVISION. GPI016 (D0)
-#define DOOR_PIN              2                                // pin connected to the DOOR. GPIO02 (D4)
+//#define AIR_PIN               14                               // pin connected to the AIR CONDITIONER. GPIO14 (D5)
+//#define TIVI_PIN              16                               // pin connected to the TELEVISION. GPI016 (D0)
+//#define DOOR_PIN              2                                // pin connected to the DOOR. GPIO02 (D4)
 
 #define BUTTON_PIN            0                                // pin connected to the BUTTON. GPIO0 (D3)
 #define LED_SUCCESS_PIN       12                               // 
@@ -32,9 +32,8 @@ PubSubClient pubsub_client(client);
 
 //define your default values here, if there are different values in config.json, they are overwritten.
 char              mqtt_server[40];
-char              mqtt_port_str[6] = "1883";
-char              light_topic[20];
-char              fan_topic[20];
+char              mqtt_port_str[6];
+char              device_topic[20];
 
 /****************************** SKETCH CODE ************************************/ 
 WiFiManager       wifiManager;
@@ -54,40 +53,15 @@ void setup() {
     Serial.println("mounting FS...");
     if (SPIFFS.begin()) {
         Serial.println("mounted file system");
-        if (SPIFFS.exists("/config.json")) {
-            //file exists, reading and loading
-            Serial.println("reading config file");
-            File configFile = SPIFFS.open("/config.json", "r");
-            if (configFile) {
-                Serial.println("opened config file");
-                size_t size = configFile.size();
-                // Allocate a buffer to store contents of the file.
-                std::unique_ptr<char[]> buf(new char[size]);
-
-                configFile.readBytes(buf.get(), size);
-                DynamicJsonDocument doc(1024);
-                DeserializationError error = deserializeJson(doc, buf.get());
-                if (error) {
-                    Serial.println("failed to load json config");
-                    Serial.println(error.c_str());
-                } else {
-                    Serial.println("\nparsed json");
-                    strcpy(mqtt_server, doc["mqtt_server"]);
-                    strcpy(mqtt_port_str, doc["mqtt_port"]);
-                    strcpy(light_topic, doc["light_topic"]);
-                    strcpy(fan_topic, doc["fan_topic"]);
-                }
-                configFile.close();
-            }
-        }
     } else {
         Serial.println("failed to mount FS");
     }
+    Serial.println(device_topic);
     //end read
     delay(10);
     // pinMode
     pinMode(LIGHT_PIN, OUTPUT);  
-    pinMode(FAN_PIN, OUTPUT);
+    pinMode(DEVICE_PIN, OUTPUT);
     
     pinMode(LED_SUCCESS_PIN, OUTPUT); 
     pinMode(LED_FAIL_PIN, OUTPUT); 
@@ -95,7 +69,7 @@ void setup() {
 
     // setup default pin
     digitalWrite(LIGHT_PIN, !LOW);  
-    digitalWrite(FAN_PIN, !LOW);
+    digitalWrite(DEVICE_PIN, !LOW);
     
     digitalWrite(LED_SUCCESS_PIN, !LOW);  
     digitalWrite(LED_FAIL_PIN, !HIGH);
@@ -116,6 +90,8 @@ void setup() {
         delay(5000);
     }
 
+    read_config_file();
+
     // Connect to WiFi access point. 
     while (WiFi.status() != WL_CONNECTED) { 
         Serial.println("connect...");
@@ -133,8 +109,6 @@ void setup() {
 
     uint16_t  mqtt_port;
     mqtt_port = strtol(mqtt_port_str, NULL, 0);
-    Serial.println(mqtt_server);
-    Serial.println(mqtt_port);
     pubsub_client.setServer(mqtt_server, mqtt_port);
     // Callback function to process publish / subscribe
     pubsub_client.setCallback(pubsubclient_callback);
@@ -144,9 +118,38 @@ void setup() {
     esp_check_reset();
 }
 
+void read_config_file() {
+    if (SPIFFS.exists("/config.json")) {
+            //file exists, reading and loading
+            Serial.println("reading config file");
+            File configFile = SPIFFS.open("/config.json", "r");
+            if (configFile) {
+                Serial.println("opened config file");
+                size_t size = configFile.size();
+                // Allocate a buffer to store contents of the file.
+                std::unique_ptr<char[]> buf(new char[size]);
+
+                configFile.readBytes(buf.get(), size);
+                DynamicJsonDocument doc(1024);
+                DeserializationError error = deserializeJson(doc, buf.get());
+                if (error) {
+                    Serial.println("failed to load json config");
+                    Serial.println(error.c_str());
+                } else {
+                    Serial.println("\nparsed json");
+                    serializeJson(doc, Serial);
+                    strcpy(mqtt_server, doc["mqtt_server"]);
+                    strcpy(device_topic, doc["device_topic"]);
+                    strcpy(mqtt_port_str, doc["mqtt_port"]);
+                }
+                configFile.close();
+            }
+        }
+}
+
 void pubsubclient_callback(char* topic, byte* payload, unsigned int length) {
     Serial.print("Topic: ");
-    Serial.print(topic);
+    Serial.println(topic);
     for (int i=0; i < length; i++) {
         Serial.print((char)payload[i]);  
     }
@@ -157,11 +160,14 @@ void pubsubclient_callback(char* topic, byte* payload, unsigned int length) {
         } else if ((char)payload[0] == 'o' && (char)payload[1] == 'f' && (char)payload[2] == 'f') {
             digitalWrite(LIGHT_PIN, !LOW);
         }
-    } else if (strncmp(topic, "fan", 3) == 0) {
+    } else if (strncmp(topic, device_topic, strlen(device_topic)) == 0) {
+        Serial.println("device topic found");
         if((char)payload[0] == 'o' && (char)payload[1] == 'n') {
-            digitalWrite(FAN_PIN, !HIGH); 
+            Serial.println("on");
+            digitalWrite(DEVICE_PIN, !HIGH); 
         } else if ((char)payload[0] == 'o' && (char)payload[1] == 'f' && (char)payload[2] == 'f') {
-            digitalWrite(FAN_PIN, !LOW); 
+          Serial.println("off");
+            digitalWrite(DEVICE_PIN, !LOW); 
         }
     }
 }
@@ -170,16 +176,16 @@ void pubsubclient_reconnect() {
     // loop until reconnected
     if(!pubsub_client.connected()) {
         Serial.println("Attempting MQTT connection ...");
-        Serial.println(light_topic);
-        Serial.println(fan_topic);
         if(pubsub_client.connect("ESP8266")) {
-            pubsub_client.subscribe(light_topic);
-            pubsub_client.subscribe(fan_topic);
+            Serial.println("connected MQTT");
+            Serial.println(device_topic);
+            pubsub_client.subscribe("light");
+            pubsub_client.subscribe(device_topic);
         } else {
           // serial print status of client when not connect to MQTT broker
           Serial.print("failed, rc=");
           Serial.print(pubsub_client.state());
-          Serial.print(" try again in 5 seconds");
+          Serial.println(" try again in 5 seconds");
           uint8_t number_try = 5;
           while(number_try -- > 0){
               digitalWrite(LED_SUCCESS_PIN, !HIGH);  
@@ -194,11 +200,11 @@ void pubsubclient_reconnect() {
 void esp_check_reset() {
   if (flag) {
         Serial.println("wifi reset");
-//      WiFi.persistent(false);
+        flag = false;
+      //WiFi.persistent(false);
 //      WiFi.disconnect(true);
         wifiManager.resetSettings();
         delay(1000);
-        flag = false;
         ESP.reset();
     }
 }

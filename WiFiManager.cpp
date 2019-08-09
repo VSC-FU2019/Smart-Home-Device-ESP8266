@@ -373,7 +373,7 @@ void WiFiManager::resetSettings() {
   DEBUG_WM(F("settings invalidated"));
   DEBUG_WM(F("THIS MAY CAUSE AP NOT TO START UP PROPERLY. YOU NEED TO COMMENT IT OUT AFTER ERASING THE DATA."));
   WiFi.disconnect(true);
-  //delay(200);
+  delay(200);
 }
 void WiFiManager::setTimeout(unsigned long seconds) {
   setConfigPortalTimeout(seconds);
@@ -602,16 +602,14 @@ void WiFiManager::handleWifiSave() {
   
   String mqtt_server = server->arg("mqtt_server").c_str();
   String mqtt_port = server->arg("mqtt_port").c_str();
-  String light_topic = server->arg("light_topic").c_str();
-  String fan_topic = server->arg("fan_topic").c_str();
+  String device_topic = server->arg("device_topic").c_str();
   
   Serial.println("saving config");
   DynamicJsonDocument doc(1024);
   doc["mqtt_server"] = mqtt_server;
+  doc["device_topic"] = device_topic;
   doc["mqtt_port"] = mqtt_port;
-  doc["light_topic"] = light_topic;
-  doc["fan_topic"] = fan_topic;
-    
+     
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile) {
       Serial.println("failed to open config file for writing");
