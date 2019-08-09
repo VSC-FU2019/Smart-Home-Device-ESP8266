@@ -602,11 +602,15 @@ void WiFiManager::handleWifiSave() {
   
   String mqtt_server = server->arg("mqtt_server").c_str();
   String mqtt_port = server->arg("mqtt_port").c_str();
-
+  String light_topic = server->arg("light_topic").c_str();
+  String fan_topic = server->arg("fan_topic").c_str();
+  
   Serial.println("saving config");
   DynamicJsonDocument doc(1024);
   doc["mqtt_server"] = mqtt_server;
   doc["mqtt_port"] = mqtt_port;
+  doc["light_topic"] = light_topic;
+  doc["fan_topic"] = fan_topic;
     
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile) {

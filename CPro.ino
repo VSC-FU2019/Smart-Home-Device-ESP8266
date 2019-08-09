@@ -5,28 +5,23 @@
 #include <ESP8266WiFi.h>                                        // ESP8266 Core WiFi Library (you most likely already have this in your sketch)
 #include <DNSServer.h>                                          //Local DNS Server used for redirecting all requests to the configuration portal
 #include <ESP8266WebServer.h>                                   //Local WebServer used to serve the configuration portal
-#include <PubSubClient.h>
-#include "WiFiManager.h"                
+#include <PubSubClient.h>               
 #include <stdlib.h>
 #include <ArduinoJson.h>                                        //https://github.com/bblanchon/ArduinoJson
 
+#include "WiFiManager.h" 
 
 /************************* SET PIN DEVICE *********************************/ 
-// -- CAN'T USE PIN 9 FOR OUTPUT - TRIGGER WDT TIMER
-//#define LIGHT_PIN             15                               // pin connected to the LIGHT. GPIO15 (D8)
+// -- CAN'T USE PIN 9 FOR OUTPUT - TRIGGER WDT TIMER                               
 #define FAN_PIN               5                                // pin connected to the FAN. GPIO5 (D1)
-#define LIGHT_PIN             4
-//#define AIR_PIN               14                               // pin connected to the AIR CONDITIONER. GPIO14 (D5)
-//#define TIVI_PIN              4                                // pin connected to the TELEVISION. GPIO4 (D2)
-//#define DOOR_PIN              2                                // pin connected to the DOOR. GPIO02 (D4)
+#define LIGHT_PIN             4                                // pin connected to the LIGHT. GPIO4 (D2)
+#define AIR_PIN               14                               // pin connected to the AIR CONDITIONER. GPIO14 (D5)
+#define TIVI_PIN              16                               // pin connected to the TELEVISION. GPI016 (D0)
+#define DOOR_PIN              2                                // pin connected to the DOOR. GPIO02 (D4)
 
 #define BUTTON_PIN            0                                // pin connected to the BUTTON. GPIO0 (D3)
 #define LED_SUCCESS_PIN       12                               // 
 #define LED_FAIL_PIN          13                               // LED SIGNAL
-
-/************************* TOPIC MQTT *********************************/ 
-#define TOPIC_LIGHT           "light"
-#define TOPIC_FAN             "fan"
 
 /************************* GLOBAL STATE *********************************/
 // Create an ESP8266 WiFiClient class to connect to the MQTT server. 
@@ -36,8 +31,10 @@ WiFiClient        client;
 PubSubClient pubsub_client(client);
 
 //define your default values here, if there are different values in config.json, they are overwritten.
-char mqtt_server[40];
-char mqtt_port_str[6] = "1883";
+char              mqtt_server[40];
+char              mqtt_port_str[6] = "1883";
+char              light_topic[20];
+char              fan_topic[20];
 
 /****************************** SKETCH CODE ************************************/ 
 WiFiManager       wifiManager;
@@ -77,6 +74,8 @@ void setup() {
                     Serial.println("\nparsed json");
                     strcpy(mqtt_server, doc["mqtt_server"]);
                     strcpy(mqtt_port_str, doc["mqtt_port"]);
+                    strcpy(light_topic, doc["light_topic"]);
+                    strcpy(fan_topic, doc["fan_topic"]);
                 }
                 configFile.close();
             }
@@ -86,7 +85,6 @@ void setup() {
     }
     //end read
     delay(10);
-
     // pinMode
     pinMode(LIGHT_PIN, OUTPUT);  
     pinMode(FAN_PIN, OUTPUT);
@@ -109,7 +107,7 @@ void setup() {
         flag = false;
     }
 
-    Serial.println(WiFi.SSID());
+    //Serial.println(WiFi.SSID());
     if (!wifiManager.autoConnect()) {
         Serial.println("failed to connect and hit timeout");
         delay(3000);
@@ -169,14 +167,15 @@ void pubsubclient_callback(char* topic, byte* payload, unsigned int length) {
 }
 
 void pubsubclient_reconnect() {
-  // loop until reconnected
-  if(!pubsub_client.connected()) {
-      Serial.println("Attempting MQTT connection ...");
-      
-      if(pubsub_client.connect("ESP8266")) {
-          pubsub_client.subscribe(TOPIC_LIGHT);
-          pubsub_client.subscribe(TOPIC_FAN);
-      } else {
+    // loop until reconnected
+    if(!pubsub_client.connected()) {
+        Serial.println("Attempting MQTT connection ...");
+        Serial.println(light_topic);
+        Serial.println(fan_topic);
+        if(pubsub_client.connect("ESP8266")) {
+            pubsub_client.subscribe(light_topic);
+            pubsub_client.subscribe(fan_topic);
+        } else {
           // serial print status of client when not connect to MQTT broker
           Serial.print("failed, rc=");
           Serial.print(pubsub_client.state());
@@ -195,8 +194,8 @@ void pubsubclient_reconnect() {
 void esp_check_reset() {
   if (flag) {
         Serial.println("wifi reset");
-        //WiFi.persistent(false);
-  //      WiFi.disconnect(true);
+//      WiFi.persistent(false);
+//      WiFi.disconnect(true);
         wifiManager.resetSettings();
         delay(1000);
         flag = false;
